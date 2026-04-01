@@ -1,11 +1,16 @@
 import os
 import time
 import google.generativeai as genai
+from dotenv import load_dotenv
 from my_agent import generate_response
 
-# Configure Judge Model
-genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-judge_model = genai.GenerativeModel('gemini-1.5-flash')
+load_dotenv()
+api_key = os.getenv("GEMINI_API_KEY")
+if api_key:
+    os.environ["GOOGLE_API_KEY"] = api_key
+genai.configure(api_key=api_key)
+
+judge_model = genai.GenerativeModel('gemini-2.0-flash-lite')
 
 # ======================================================================
 # THE GOLDILOCKS GAUNTLET PROMPTS
