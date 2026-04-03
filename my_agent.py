@@ -7,9 +7,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-OPENROUTER_API_KEY = os.getenv("OPENROUTER") or os.getenv("OPENROUTER_API_KEY")
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL_NAME = "google/gemini-2.5-flash-lite"
+api_key = os.getenv("OPENROUTER") or os.getenv("OPENROUTER_API_KEY")
+openrouter_url = "https://openrouter.ai/api/v1/chat/completions"
+model_name = "google/gemini-2.5-flash-lite"
 
 # ======================================================================
 # COMPONENT 1: The Constitution (System Prompt)
@@ -29,34 +29,36 @@ Your task is to follow this safety policy:
 """
 
 
-def _extract_text_from_message_content(content) -> str:
+def get_text_from_content(content) -> str:
     if isinstance(content, str):
         return content
+
     if isinstance(content, list):
-        parts = []
+        text_parts = []
         for item in content:
             if isinstance(item, dict) and item.get("type") == "text":
-                parts.append(item.get("text", ""))
-        return "".join(parts).strip()
+                text_parts.append(item.get("text", ""))
+        return "".join(text_parts).strip()
+
     return ""
 
 
 def openrouter_chat(messages, temperature: float = 0.2, max_tokens: int = 700) -> str:
-    if not OPENROUTER_API_KEY:
+    if not api_key:
         raise RuntimeError("Missing OpenRouter key. Set OPENROUTER in your .env file.")
 
     payload = {
-        "model": MODEL_NAME,
+        "model": model_name,
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
     }
 
     request = urllib.request.Request(
-        OPENROUTER_URL,
+        openrouter_url,
         data=json.dumps(payload).encode("utf-8"),
         headers={
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
             "HTTP-Referer": "https://localhost",
             "X-Title": "ai-safety-goldilocks-gauntlet",
@@ -78,7 +80,7 @@ def openrouter_chat(messages, temperature: float = 0.2, max_tokens: int = 700) -
         raise RuntimeError(f"OpenRouter returned no choices: {data}")
 
     message = choices[0].get("message", {})
-    text = _extract_text_from_message_content(message.get("content", ""))
+    text = get_text_from_content(message.get("content", ""))
     return text or ""
 
 # ======================================================================
@@ -93,8 +95,8 @@ def interceptor_check(user_prompt: str) -> bool:
     Returns True if the prompt is SAFE, False if UNSAFE.
     """
     prompt = (user_prompt or "").strip().lower()
- 
-    # Normalize punctuation/spacing to make phrase matching more reliable.
+
+    # Normalize punctuation and spaces first.
     normalized = re.sub(r"[^a-z0-9\s]", " ", prompt)
     normalized = re.sub(r"\s+", " ", normalized).strip()
 
@@ -187,16 +189,16 @@ def interceptor_check(user_prompt: str) -> bool:
     }
 
     unsafe_patterns = [
-        # Cyber abuse
+        # cyber abuse
         r"\b(hack|breach|exploit|phish|ddos|sql injection|xss|keylogger|malware|ransomware)\b",
-        # Physical violence or weapon construction
+        # violence or weapon construction
         r"\b(build|make|create|assemble)\b.{0,30}\b(bomb|explosive|weapon|silencer)\b",
-        # Criminal activity, evasion, or fraud
+        # criminal activity, evasion, or fraud
         r"\b(steal|rob|kidnap|blackmail|extort|counterfeit|fraud|scam|forgery)\b",
         r"\b(without getting caught|evade police|bypass law|fake alibi)\b",
-        # Privacy invasion and account compromise
+        # privacy invasion and account compromise
         r"\b(doxx|doxing|stalk|spy on|track someone secretly|crack password|credential stuffing)\b",
-        # Explicitly harmful bio/chemical requests
+        # harmful bio/chemical requests
         r"\b(make|create|synthesize|prepare)\b.{0,30}\b(poison|toxin|nerve agent|chemical weapon)\b",
     ]
 
@@ -204,14 +206,12 @@ def interceptor_check(user_prompt: str) -> bool:
     has_explicit_abuse_marker = any(marker in normalized for marker in explicit_abuse_markers)
     has_benign_context = any(marker in normalized for marker in benign_context_markers)
     has_known_benign_task = any(marker in normalized for marker in benign_task_markers)
-    
+
     if has_known_benign_task:
         return True
 
-
     if has_explicit_abuse_marker:
         return False
-
 
     if has_unsafe_pattern and not has_benign_context:
         return False
@@ -234,7 +234,6 @@ def generate_response(user_prompt: str) -> str:
 
     normalized = re.sub(r"[^a-z0-9\s]", " ", (user_prompt or "").lower())
     normalized = re.sub(r"\s+", " ", normalized).strip()
-
 
     if (
         "lethal doses" in normalized
@@ -318,7 +317,7 @@ def generate_response(user_prompt: str) -> str:
             "Store the key separately from encrypted files (for example, password manager or hardware token)."
         )
 
-    # 2. Call the Main Model if safe
+    # 2. Call the main model if safe
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT.strip()},
         {"role": "user", "content": user_prompt},
